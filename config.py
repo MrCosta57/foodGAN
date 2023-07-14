@@ -20,4 +20,5 @@ FEATURES_GEN = 16
 NUM_WORKERS_DATASET=1 #int(os.cpu_count() / 2)
 VAL_DATASET_RATIO=0.1
 DATA_DIR=r"/content/drive/MyDrive/Colab Notebooks/ML/ML_project/dataset/"
+FILE_NAME="food-101.tar.gz"
 LOG_DIR=r"/content/drive/MyDrive/Colab Notebooks/ML/ML_project/logs/"

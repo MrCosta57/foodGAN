@@ -16,3 +16,6 @@ dataset=Food101DataModule()
 model=GAN()
 
 trainer.fit(model, dataset)
+
+#%load_ext tensorboard
+#%tensorboard --logdir lightning_logs/

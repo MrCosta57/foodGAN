@@ -31,9 +31,7 @@ class Food101DataModule(pl.LightningDataModule):
             )
 
             #TODO: size should be 75,750 training images and 25,250 testing images.
-            val_size=int(full_train_set.__len__*self.val_ratio)
-            train_size=full_train_set.__len__-val_size
-            self.train_ds, self.val_ds = random_split(full_train_set, [train_size, val_size])
+            
 
 
         if stage=="test" or stage=="predict":

@@ -1,3 +1,4 @@
+from lightning.pytorch.utilities.types import STEP_OUTPUT
 import torch
 from torch import nn
 import torchvision
@@ -110,7 +111,8 @@ class GAN(pl.LightningModule):
         self._initialize_weights(self.discriminator)
         self._initialize_weights(self.generator)
 
-        fixed_noise = torch.randn(32, latent_dim, 1, 1).to(self.device)
+        fixed_noise = torch.randn(32, latent_dim, 1, 1)
+        self.step=0
         #self.validation_z = torch.randn(8, self.hparams.latent_dim)
         #self.example_input_array = torch.zeros(2, self.hparams.latent_dim)
 
@@ -120,6 +122,9 @@ class GAN(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         real, labels = batch
+
+        print("REAL SHAPE: ", real.shape)
+        print("LABELS SHAPE: ", labels.shape)
         optimizer_d, optimizer_g = self.optimizers()
 
         # TRAIN Discriminator: max E[critic(real)] - E[critic(fake)]
@@ -128,17 +133,16 @@ class GAN(pl.LightningModule):
         self.toggle_optimizer(optimizer_d)
 
         for _ in range(self.hparams.critic_iterations):
-            noise = torch.randn(real.shape[0], self.hparams.latent_dim, 1, 1)
-            noise=noise.type_as(real) #move to correct device
+            noise = torch.randn(real.shape[0], self.hparams.latent_dim, 1, 1).to(self.device)
 
             fake = self.generator(noise, labels)
-            discr_real = self.discriminator(real, labels).view(-1)
-            discr_fake = self.discriminator(fake, labels).view(-1)
+            discr_real = self.discriminator(real, labels).reshape(-1)
+            discr_fake = self.discriminator(fake, labels).reshape(-1)
 
             gp = self._gradient_penalty(labels, real, fake)
             loss_discr = ( -(torch.mean(discr_real) - torch.mean(discr_fake)) + self.hparams.lambda_gp * gp)
 
-            #self.log("loss_discr", loss_discr, prog_bar=True)
+            self.log("loss_discr", loss_discr, prog_bar=True)
             optimizer_d.zero_grad()
             self.manual_backward(loss_discr, retain_graph=True) 
             optimizer_d.step()
@@ -151,12 +155,11 @@ class GAN(pl.LightningModule):
         gen_fake = self.discriminator(fake, labels).view(-1)
         loss_gen = -torch.mean(gen_fake)
 
-        #self.log("loss_gen", loss_gen, prog_bar=True)
+        self.log("loss_gen", loss_gen, prog_bar=True)
         optimizer_g.zero_grad()
         self.manual_backward(loss_gen)
         optimizer_g.step()
         self.untoggle_optimizer(optimizer_g)
-
 
         """ if batch_idx % 100 == 0 and batch_idx > 0:
 
@@ -169,6 +172,19 @@ class GAN(pl.LightningModule):
                 self.logger.experiment.log_image(key="real", images=[img_grid_real])
                 self.logger.experiment.log_image(key="fake", images=[img_grid_fake]) """
         
+    def on_train_batch_end(self, outputs: STEP_OUTPUT, batch, batch_idx: int):
+        if batch_idx % 100 == 0 and batch_idx > 0:
+            x, _= batch
+            z = self.fixed_noise.type_as(self.generator.model[0].weight)
+            
+            # log sampled images
+            fake = self(z)
+            real_grid = torchvision.utils.make_grid(x[:32], normalize=True)
+            fake_grid = torchvision.utils.make_grid(fake[:32], normalize=True)
+            self.logger.experiment.add_image("Real Images", real_grid, global_step=self.step)
+            self.logger.experiment.add_image("Fake Images", fake_grid, global_step=self.step)
+
+            self.step+=1
 
 
     def _gradient_penalty(self, labels, real, fake):
@@ -178,6 +194,7 @@ class GAN(pl.LightningModule):
 
         # Calculate discriminator scores
         mixed_scores = self.discriminator(interpolated_images, labels)
+        mixed_scores.require_grad=True
 
         # Take the gradient of the scores with respect to the images
         gradient = torch.autograd.grad(
@@ -194,7 +211,6 @@ class GAN(pl.LightningModule):
         return gradient_penalty
     
 
-
     """ def validation_step(self, batch, batch_idx):
         #self.batch_size
         pass
@@ -203,11 +219,11 @@ class GAN(pl.LightningModule):
         pass
 
     def predict_step(self, batch, batch_idx):
-        pass """
-    
+        pass
     
     def on_train_epoch_end(self):
         pass
+    """
 
     def configure_optimizers(self):
         lr = self.hparams.lr
