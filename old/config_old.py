@@ -1,4 +1,4 @@
-import os, torch
+import os
 
 LEARNING_RATE = 1e-4
 B1=0.0
@@ -6,7 +6,6 @@ B2=0.99
 CRITIC_ITERATIONS = 5
 LAMBDA_GP = 10.0
 NUM_EPOCHS = 100
-DEVICE= "cuda" if torch.cuda.is_available() else "cpu"
 
 Z_DIM = 100
 BATCH_SIZE = 64

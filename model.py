@@ -1,18 +1,15 @@
-from lightning.pytorch.utilities.types import STEP_OUTPUT
 import torch
-from torch import nn
+import torch.nn as nn
+from tqdm import tqdm
 import torchvision
-import lightning.pytorch as pl
+from torch.utils.tensorboard import SummaryWriter
 import config
 
-
-# Discriminator model
 class Discriminator(nn.Module):
     def __init__(self, channels_img, features_d, num_classes, img_size):
         super(Discriminator, self).__init__()
-        self.discr = nn.Sequential(
+        self.disc = nn.Sequential(
             # input: N x channels_img x 64 x 64
-            # channels_img+1 because also lables are taken into account as an additional dimension
             nn.Conv2d(channels_img+1, features_d, kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(0.2),
             # _block(in_channels, out_channels, kernel_size, stride, padding)
@@ -22,9 +19,9 @@ class Discriminator(nn.Module):
             # After all _block img output is 4x4 (Conv2d below makes into 1x1)
             nn.Conv2d(features_d * 8, 1, kernel_size=4, stride=2, padding=0),
         )
+
         self.embed=nn.Embedding(num_classes, img_size*img_size)
         self.img_size=img_size
-
 
     def _block(self, in_channels, out_channels, kernel_size, stride, padding):
         return nn.Sequential(
@@ -40,17 +37,16 @@ class Discriminator(nn.Module):
             nn.LeakyReLU(0.2),
         )
 
-    def forward(self, x, lables):
-        embedding=self.embed(lables).view(lables.shape[0], 1, self.img_size, self.img_size)
+    def forward(self, x, labels):
+        embedding=self.embed(labels).view(labels.shape[0], 1, self.img_size, self.img_size)
         x=torch.cat([x, embedding], dim=1)
-        return self.discr(x)
+        return self.disc(x)
 
 
-# Generator model
 class Generator(nn.Module):
     def __init__(self, channels_noise, channels_img, features_g, num_classes, img_size, embed_size):
         super(Generator, self).__init__()
-        self.gener = nn.Sequential(
+        self.net = nn.Sequential(
             # Input: N x channels_noise x 1 x 1
             self._block(channels_noise+embed_size, features_g * 16, 4, 1, 0),  # img: 4x4
             self._block(features_g * 16, features_g * 8, 4, 2, 1),  # img: 8x8
@@ -81,15 +77,14 @@ class Generator(nn.Module):
         )
 
     def forward(self, x, labels):
-        #latent vector z: N x noise_dim x 1 x 1
-        embedding=self.embed(labels).unsqueeze(2).unsqueeze(3)
+        embedding=self.embed(labels)
+        embedding=embedding.unsqueeze(2).unsqueeze(3)
         x=torch.cat([x, embedding], dim=1)
-        return self.gener(x)
-    
+        return self.net(x)
 
 
 
-class GAN(pl.LightningModule):
+class GAN(nn.Module):
     def __init__(self,
                  latent_dim: int = config.Z_DIM, lr: float = config.LEARNING_RATE,
                  b1: float = config.B1,
@@ -101,100 +96,96 @@ class GAN(pl.LightningModule):
                  features_g: int = config.FEATURES_GEN,
                  img_size: int = config.IMG_SIZE,
                  embed_size: int = config.GEN_EMBEDDING,
-                 num_classes: int =config.NUM_CLASSES):
-        super().__init__()
-        self.save_hyperparameters()
+                 num_classes: int = config.NUM_CLASSES,
+                 device: str = config.DEVICE):
+        super(GAN, self).__init__()
 
-        self.automatic_optimization = False
-        self.discriminator = Discriminator(channel_img, features_d, num_classes, img_size)
-        self.generator = Generator(latent_dim, channel_img, features_g, num_classes, img_size, embed_size)
-        self._initialize_weights(self.discriminator)
+        #PARAMETERS
+        self.step=0
+        self.device=device
+        self.latent_dim=latent_dim
+        self.lr=lr
+        self.b1=b1
+        self.b2=b2
+        self.critic_iterations=critic_iterations
+        self.labmda_gp=lambda_gp
+
+        self.critic = Discriminator(channel_img, features_d, num_classes, img_size).to(device)
+        self.generator = Generator(latent_dim, channel_img, features_g, num_classes, img_size, embed_size).to(device)
+        self._initialize_weights(self.critic)
         self._initialize_weights(self.generator)
 
-        fixed_noise = torch.randn(32, latent_dim, 1, 1)
-        self.step=0
-        #self.validation_z = torch.randn(8, self.hparams.latent_dim)
-        #self.example_input_array = torch.zeros(2, self.hparams.latent_dim)
+        self.validation_z = torch.randn(32, latent_dim, 1, 1).to(device)
+        
 
     def forward(self, z, y):
         return self.generator(z, y)
 
 
-    def training_step(self, batch, batch_idx):
-        real, labels = batch
+    def training_loop(self, data_loader, EPOCHS=config.NUM_EPOCHS, debug_mode=True):
+        print("Training started!")
+        self.critic.train()
+        self.generator.train()
+        opt_critic, opt_g=self._configure_optimizers()
 
-        print("REAL SHAPE: ", real.shape)
-        print("LABELS SHAPE: ", labels.shape)
-        optimizer_d, optimizer_g = self.optimizers()
-
-        # TRAIN Discriminator: max E[critic(real)] - E[critic(fake)]
-        # equivalent to minimizing the negative of that
-        # (Measure discriminator's ability to classify real from generated samples)
-        self.toggle_optimizer(optimizer_d)
-
-        for _ in range(self.hparams.critic_iterations):
-            noise = torch.randn(real.shape[0], self.hparams.latent_dim, 1, 1).to(self.device)
-
-            fake = self.generator(noise, labels)
-            discr_real = self.discriminator(real, labels).reshape(-1)
-            discr_fake = self.discriminator(fake, labels).reshape(-1)
-
-            gp = self._gradient_penalty(labels, real, fake)
-            loss_discr = ( -(torch.mean(discr_real) - torch.mean(discr_fake)) + self.hparams.lambda_gp * gp)
-
-            self.log("loss_discr", loss_discr, prog_bar=True)
-            optimizer_d.zero_grad()
-            self.manual_backward(loss_discr, retain_graph=True) 
-            optimizer_d.step()
-
-        self.untoggle_optimizer(optimizer_d)
-
-
-        #TRAIN Generator
-        self.toggle_optimizer(optimizer_g)
-        gen_fake = self.discriminator(fake, labels).view(-1)
-        loss_gen = -torch.mean(gen_fake)
-
-        self.log("loss_gen", loss_gen, prog_bar=True)
-        optimizer_g.zero_grad()
-        self.manual_backward(loss_gen)
-        optimizer_g.step()
-        self.untoggle_optimizer(optimizer_g)
-
-        """ if batch_idx % 100 == 0 and batch_idx > 0:
-
-            with torch.no_grad():
-                fake = self.generator(self.fixed_noise, labels)
-                # take out (up to) 32 examples
-                img_grid_real = torchvision.utils.make_grid(real[:32], normalize=True)
-                img_grid_fake = torchvision.utils.make_grid(fake[:32], normalize=True)
-
-                self.logger.experiment.log_image(key="real", images=[img_grid_real])
-                self.logger.experiment.log_image(key="fake", images=[img_grid_fake]) """
+        if debug_mode:
+            self.logger = SummaryWriter(f"logs/food_gan/")
         
-    def on_train_batch_end(self, outputs: STEP_OUTPUT, batch, batch_idx: int):
-        if batch_idx % 100 == 0 and batch_idx > 0:
-            x, _= batch
-            z = self.fixed_noise.type_as(self.generator.model[0].weight)
-            
+        for epoch in range(EPOCHS):
+            for batch_idx, (real, labels) in enumerate(tqdm(data_loader)):
+                
+                real.to(self.device)
+                labels.to(self.device)
+
+                for _ in range(self.critic_iterations):
+                    noise = torch.randn(real.shape[0], self.latent_dim, 1, 1).to(self.device)
+                    fake = self.generator(noise, labels)
+
+                    critic_real = self.critic(real, labels).reshape(-1)
+                    critic_fake = self.critic(fake, labels).reshape(-1)
+
+                    gp = self._gradient_penalty(labels, real, fake)
+                    loss_critic = -(torch.mean(critic_real) - torch.mean(critic_fake)) + self.labmda_gp * gp
+                    if debug_mode: self.logger.add_scalar("Loss of Critic", loss_critic)
+                    self.critic.zero_grad()
+                    loss_critic.backward(retain_graph=True)
+                    opt_critic.step()
+
+                # Train Generator: max E[critic(gen_fake)] <-> min -E[critic(gen_fake)]
+                gen_fake = self.critic(fake, labels).reshape(-1)
+                loss_gen = -torch.mean(gen_fake)
+                if debug_mode: self.logger.add_scalar("Loss of Gen", loss_gen)
+                self.generator.zero_grad()
+                loss_gen.backward()
+                opt_g.step()
+
+                if debug_mode and batch_idx % 100 == 0 and batch_idx > 0:
+                    self._on_train_batch_end(real, labels, epoch, batch_idx, data_loader, loss_critic, loss_gen, EPOCHS)
+        print("Training ended!")
+
+
+    def _on_train_batch_end(self, x, labels, epoch, batch_idx, loader, loss_critic, loss_gen, EPOCHS):
+        print(f"Epoch [{epoch}/{EPOCHS}] Batch {batch_idx}/{len(loader)} \
+                Loss D: {loss_critic:.4f}, loss G: {loss_gen:.4f}")
+        with torch.no_grad():   
             # log sampled images
-            fake = self(z)
+            fake = self(self.validation_z, labels)
             real_grid = torchvision.utils.make_grid(x[:32], normalize=True)
             fake_grid = torchvision.utils.make_grid(fake[:32], normalize=True)
-            self.logger.experiment.add_image("Real Images", real_grid, global_step=self.step)
-            self.logger.experiment.add_image("Fake Images", fake_grid, global_step=self.step)
+            self.logger.add_image("Real Images", real_grid, global_step=self.step)
+            self.logger.add_image("Fake Images", fake_grid, global_step=self.step)
+        self.step+=1
 
-            self.step+=1
-
+        
 
     def _gradient_penalty(self, labels, real, fake):
+
         BATCH_SIZE, C, H, W = real.shape
         alpha = torch.rand((BATCH_SIZE, 1, 1, 1)).repeat(1, C, H, W).to(self.device)
         interpolated_images = real * alpha + fake * (1 - alpha)
 
-        # Calculate discriminator scores
-        mixed_scores = self.discriminator(interpolated_images, labels)
-        mixed_scores.require_grad=True
+        # Calculate critic scores
+        mixed_scores = self.critic(interpolated_images, labels)
 
         # Take the gradient of the scores with respect to the images
         gradient = torch.autograd.grad(
@@ -207,33 +198,19 @@ class GAN(pl.LightningModule):
         gradient = gradient.view(gradient.shape[0], -1)
         gradient_norm = gradient.norm(2, dim=1)
         gradient_penalty = torch.mean((gradient_norm - 1) ** 2)
-
+        
         return gradient_penalty
-    
 
-    """ def validation_step(self, batch, batch_idx):
-        #self.batch_size
-        pass
-    
-    def test_step(self, batch, batch_idx):
-        pass
 
-    def predict_step(self, batch, batch_idx):
-        pass
-    
-    def on_train_epoch_end(self):
-        pass
-    """
 
-    def configure_optimizers(self):
-        lr = self.hparams.lr
-        b1 = self.hparams.b1
-        b2 = self.hparams.b2
-
-        opt_d = torch.optim.Adam(self.discriminator.parameters(), lr=lr, betas=(b1, b2))
+    def _configure_optimizers(self):
+        lr = self.lr
+        b1 = self.b1
+        b2 = self.b2
+        opt_d = torch.optim.Adam(self.critic.parameters(), lr=lr, betas=(b1, b2))
         opt_g = torch.optim.Adam(self.generator.parameters(), lr=lr, betas=(b1, b2))
 
-        return [opt_d, opt_g], []
+        return opt_d, opt_g
 
     @staticmethod
     def _initialize_weights(model):
@@ -241,3 +218,31 @@ class GAN(pl.LightningModule):
         for m in model.modules():
             if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d, nn.BatchNorm2d)):
                 nn.init.normal_(m.weight.data, 0.0, 0.02) #in-place update
+
+
+
+    def save_checkpoint(state, filename="celeba_wgan_gp.pth.tar"):
+        print("=> Saving checkpoint")
+        torch.save(state, filename)
+
+
+    def load_checkpoint(checkpoint, gen, disc):
+        print("=> Loading checkpoint")
+        gen.load_state_dict(checkpoint['gen'])
+        disc.load_state_dict(checkpoint['disc'])
+
+
+
+
+def test():
+    N, in_channels, H, W = 8, 3, 64, 64
+    noise_dim = 100
+    x = torch.randn((N, in_channels, H, W))
+    disc = Discriminator(in_channels, 8)
+    assert disc(x).shape == (N, 1, 1, 1), "Discriminator test failed"
+    gen = Generator(noise_dim, in_channels, 8)
+    z = torch.randn((N, noise_dim, 1, 1))
+    assert gen(z).shape == (N, in_channels, H, W), "Generator test failed"
+
+
+# test()

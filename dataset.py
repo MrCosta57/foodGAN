@@ -13,24 +13,25 @@ class Food101DataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.val_ratio=val_ratio
-        self.temp_dir = tempfile.mkdtemp()
+        #self.temp_dir = tempfile.mkdtemp()
 
     def prepare_data(self):
-        print("Search for dataset in ", config.DATA_DIR+config.FILE_NAME)
+        """ print("Search for dataset in ", config.DATA_DIR+config.FILE_NAME)
         print("Extract dataset in ", self.temp_dir)
         # Open the tar.gz file
         with tarfile.open(config.DATA_DIR+config.FILE_NAME, 'r:gz') as tar:
             # Extract the contents to the temporary environment
             tar.extractall(self.temp_dir)
-        print("Extraction done!")
+        print("Extraction done!") """
 
         #Food101(self.data_dir, split="train", download=True)
         #Food101(self.data_dir, split="test", download=True)
+        pass
 
     def setup(self, stage):
         # Assign train/val datasets for use in dataloaders
-        if stage=="fit" or stage is None:
-            full_train_set = Food101(root=self.temp_dir, split="train",
+        if stage=="fit" or stage is None: #self.temp_dir
+            full_train_set = Food101(root=self.data_dir, split="train",
                 transform=transforms.Compose([
                     transforms.RandomResizedCrop(config.IMG_SIZE),
                     transforms.RandomVerticalFlip(),
@@ -39,6 +40,9 @@ class Food101DataModule(pl.LightningDataModule):
                 ]),
                 download=False,
             )
+            """ transforms.Normalize(
+            [0.5 for _ in range(CHANNELS_IMG)], [0.5 for _ in range(CHANNELS_IMG)]
+            ) """
             
             val_size=int(full_train_set.__len__()*self.val_ratio)
             train_size=full_train_set.__len__()-val_size
@@ -55,7 +59,6 @@ class Food101DataModule(pl.LightningDataModule):
                 ]),
                 download=False,
             )
-
 
 
     def train_dataloader(self):
