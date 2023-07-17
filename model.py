@@ -1,27 +1,33 @@
 import torch
 import torch.nn as nn
 from tqdm import tqdm
+import numpy as np
 import torchvision
 from torch.utils.tensorboard import SummaryWriter
+from lightning.fabric import Fabric
 import config
 
 class Discriminator(nn.Module):
     def __init__(self, channels_img, features_d, num_classes, img_size):
         super(Discriminator, self).__init__()
         self.disc = nn.Sequential(
-            # input: N x channels_img x 64 x 64
-            nn.Conv2d(channels_img+1, features_d, kernel_size=4, stride=2, padding=1),
+            #Input: N x channels_img x 64 x 64
+            nn.Conv2d(channels_img+1, features_d, kernel_size=4, stride=2, padding=1), # img: 32 x 32
             nn.LeakyReLU(0.2),
-            # _block(in_channels, out_channels, kernel_size, stride, padding)
-            self._block(features_d, features_d * 2, 4, 2, 1),
-            self._block(features_d * 2, features_d * 4, 4, 2, 1),
-            self._block(features_d * 4, features_d * 8, 4, 2, 1),
-            # After all _block img output is 4x4 (Conv2d below makes into 1x1)
+
+            #The definition is: _block(in_channels, out_channels, kernel_size, stride, padding)
+            self._block(features_d, features_d * 2, 4, 2, 1), # img: 16 x 16
+            self._block(features_d * 2, features_d * 4, 4, 2, 1), # img: 8 x 8
+            self._block(features_d * 4, features_d * 8, 4, 2, 1), # img: 4 x 4
+
+            # Conv2d below makes into 1x1
             nn.Conv2d(features_d * 8, 1, kernel_size=4, stride=2, padding=0),
         )
 
+        #To handel class labels' information
         self.embed=nn.Embedding(num_classes, img_size*img_size)
         self.img_size=img_size
+
 
     def _block(self, in_channels, out_channels, kernel_size, stride, padding):
         return nn.Sequential(
@@ -33,7 +39,7 @@ class Discriminator(nn.Module):
                 padding,
                 bias=False,
             ),
-            nn.InstanceNorm2d(out_channels, affine=True),
+            nn.BatchNorm2d(out_channels, affine=True),
             nn.LeakyReLU(0.2),
         )
 
@@ -43,11 +49,12 @@ class Discriminator(nn.Module):
         return self.disc(x)
 
 
+
 class Generator(nn.Module):
     def __init__(self, channels_noise, channels_img, features_g, num_classes, img_size, embed_size):
         super(Generator, self).__init__()
         self.net = nn.Sequential(
-            # Input: N x channels_noise x 1 x 1
+            #Input: N x channels_noise x 1 x 1
             self._block(channels_noise+embed_size, features_g * 16, 4, 1, 0),  # img: 4x4
             self._block(features_g * 16, features_g * 8, 4, 2, 1),  # img: 8x8
             self._block(features_g * 8, features_g * 4, 4, 2, 1),  # img: 16x16
@@ -55,10 +62,11 @@ class Generator(nn.Module):
             nn.ConvTranspose2d(
                 features_g * 2, channels_img, kernel_size=4, stride=2, padding=1
             ),
-            # Output: N x channels_img x 64 x 64
+            #Output: N x channels_img x 64 x 64
             nn.Tanh(),
         )
         self.img_size=img_size
+        #To handel class labels' information
         self.embed=nn.Embedding(num_classes, embed_size)
 
 
@@ -97,75 +105,92 @@ class GAN(nn.Module):
                  img_size: int = config.IMG_SIZE,
                  embed_size: int = config.GEN_EMBEDDING,
                  num_classes: int = config.NUM_CLASSES,
-                 device: str = config.DEVICE):
+                 precision: str = config.PRECISION,
+                 num_devices: int = config.NUM_DEVICES):
         super(GAN, self).__init__()
 
         #PARAMETERS
         self.step=0
-        self.device=device
         self.latent_dim=latent_dim
         self.lr=lr
         self.b1=b1
         self.b2=b2
         self.critic_iterations=critic_iterations
         self.labmda_gp=lambda_gp
+        self.precision=precision
+        self.num_devices=num_devices
 
-        self.critic = Discriminator(channel_img, features_d, num_classes, img_size).to(device)
-        self.generator = Generator(latent_dim, channel_img, features_g, num_classes, img_size, embed_size).to(device)
+        self.critic = Discriminator(channel_img, features_d, num_classes, img_size)#.to(device)
+        self.generator = Generator(latent_dim, channel_img, features_g, num_classes, img_size, embed_size)#.to(device)
         self._initialize_weights(self.critic)
         self._initialize_weights(self.generator)
-
-        self.validation_z = torch.randn(32, latent_dim, 1, 1).to(device)
         
 
     def forward(self, z, y):
         return self.generator(z, y)
-
-
-    def training_loop(self, data_loader, EPOCHS=config.NUM_EPOCHS, debug_mode=True):
+        
+        
+    def training_loop(self, data_loader, num_epochs=config.NUM_EPOCHS, debug_mode=False, debug_grad=False):
+        if debug_grad: torch.autograd.set_detect_anomaly(True)
         print("Training started!")
+        opt_critic, opt_g=self._configure_optimizers()
+
+        #Fabric framework optimization
+        fabric=Fabric(accelerator="auto", precision=self.precision, devices=self.num_devices, strategy="auto")
+        self.critic, opt_critic=fabric.setup(self.critic, opt_critic)
+        self.generator, opt_g=fabric.setup(self.generator, opt_g)
+        data_loader=fabric.setup_dataloaders(data_loader)
+        print("End fabric setup")
+        
         self.critic.train()
         self.generator.train()
-        opt_critic, opt_g=self._configure_optimizers()
 
         if debug_mode:
             self.logger = SummaryWriter(f"logs/food_gan/")
+            self.critic_loss_list=[]
+            self.gen_loss_list=[]
+            self.validation_z = torch.randn(data_loader.batch_size, self.latent_dim, 1, 1, device=fabric.device)
         
-        for epoch in range(EPOCHS):
+        for epoch in range(num_epochs):
             for batch_idx, (real, labels) in enumerate(tqdm(data_loader)):
-                
-                real.to(self.device)
-                labels.to(self.device)
+                #real=real.to(self.device)
+                #labels=labels.to(self.device)
 
                 for _ in range(self.critic_iterations):
-                    noise = torch.randn(real.shape[0], self.latent_dim, 1, 1).to(self.device)
+                    noise = torch.randn(real.shape[0], self.latent_dim, 1, 1, device=fabric.device)#.to(self.device)
                     fake = self.generator(noise, labels)
 
                     critic_real = self.critic(real, labels).reshape(-1)
                     critic_fake = self.critic(fake, labels).reshape(-1)
 
-                    gp = self._gradient_penalty(labels, real, fake)
+                    gp = self._gradient_penalty(labels, real, fake, fabric.device)
                     loss_critic = -(torch.mean(critic_real) - torch.mean(critic_fake)) + self.labmda_gp * gp
-                    if debug_mode: self.logger.add_scalar("Loss of Critic", loss_critic)
+                    if debug_mode: self.critic_loss_list.append(loss_critic.item())
+                    if debug_mode and batch_idx % config.DEBUG_EVERY_ITER == 0 and batch_idx > 0:
+                        self.logger.add_scalar("Loss of Critic", np.mean(self.critic_loss_list))
+                        self.critic_loss_list=[]
                     self.critic.zero_grad()
-                    loss_critic.backward(retain_graph=True)
+                    fabric.backward(loss_critic, retain_graph=True)
                     opt_critic.step()
 
                 # Train Generator: max E[critic(gen_fake)] <-> min -E[critic(gen_fake)]
                 gen_fake = self.critic(fake, labels).reshape(-1)
                 loss_gen = -torch.mean(gen_fake)
-                if debug_mode: self.logger.add_scalar("Loss of Gen", loss_gen)
+                if debug_mode: self.gen_loss_list.append(loss_gen.item())
+                if debug_mode and batch_idx % config.DEBUG_EVERY_ITER == 0 and batch_idx > 0:
+                    self.logger.add_scalar("Loss of Gen", np.mean(self.gen_loss_list))
+                    self.gen_loss_list=[]
                 self.generator.zero_grad()
-                loss_gen.backward()
+                fabric.backward(loss_gen)
                 opt_g.step()
 
-                if debug_mode and batch_idx % 100 == 0 and batch_idx > 0:
-                    self._on_train_batch_end(real, labels, epoch, batch_idx, data_loader, loss_critic, loss_gen, EPOCHS)
+                if debug_mode and batch_idx % config.DEBUG_EVERY_ITER == 0 and batch_idx > 0:
+                    self._on_train_batch_end(real, labels, epoch, batch_idx, data_loader, loss_critic.item(), loss_gen.item(), num_epochs)
         print("Training ended!")
 
 
-    def _on_train_batch_end(self, x, labels, epoch, batch_idx, loader, loss_critic, loss_gen, EPOCHS):
-        print(f"Epoch [{epoch}/{EPOCHS}] Batch {batch_idx}/{len(loader)} \
+    def _on_train_batch_end(self, x, labels, epoch, batch_idx, loader, loss_critic, loss_gen, num_epochs):
+        print(f"Epoch [{epoch}/{num_epochs}] Batch {batch_idx}/{len(loader)} \
                 Loss D: {loss_critic:.4f}, loss G: {loss_gen:.4f}")
         with torch.no_grad():   
             # log sampled images
@@ -178,10 +203,10 @@ class GAN(nn.Module):
 
         
 
-    def _gradient_penalty(self, labels, real, fake):
+    def _gradient_penalty(self, labels, real, fake, device):
 
         BATCH_SIZE, C, H, W = real.shape
-        alpha = torch.rand((BATCH_SIZE, 1, 1, 1)).repeat(1, C, H, W).to(self.device)
+        alpha = torch.rand((BATCH_SIZE, 1, 1, 1)).repeat(1, C, H, W).to(device)
         interpolated_images = real * alpha + fake * (1 - alpha)
 
         # Calculate critic scores
@@ -191,7 +216,7 @@ class GAN(nn.Module):
         gradient = torch.autograd.grad(
             inputs=interpolated_images,
             outputs=mixed_scores,
-            grad_outputs=torch.ones_like(mixed_scores),
+            grad_outputs=torch.ones_like(mixed_scores, device=device),
             create_graph=True,
             retain_graph=True,
         )[0]
@@ -221,7 +246,7 @@ class GAN(nn.Module):
 
 
 
-    def save_checkpoint(state, filename="celeba_wgan_gp.pth.tar"):
+    def save_checkpoint(state, filename="food101_wgan_gp.pth.tar"):
         print("=> Saving checkpoint")
         torch.save(state, filename)
 
@@ -230,19 +255,3 @@ class GAN(nn.Module):
         print("=> Loading checkpoint")
         gen.load_state_dict(checkpoint['gen'])
         disc.load_state_dict(checkpoint['disc'])
-
-
-
-
-def test():
-    N, in_channels, H, W = 8, 3, 64, 64
-    noise_dim = 100
-    x = torch.randn((N, in_channels, H, W))
-    disc = Discriminator(in_channels, 8)
-    assert disc(x).shape == (N, 1, 1, 1), "Discriminator test failed"
-    gen = Generator(noise_dim, in_channels, 8)
-    z = torch.randn((N, noise_dim, 1, 1))
-    assert gen(z).shape == (N, in_channels, H, W), "Generator test failed"
-
-
-# test()
