@@ -39,7 +39,7 @@ class Discriminator(nn.Module):
                 padding,
                 bias=False,
             ),
-            nn.BatchNorm2d(out_channels, affine=True),
+            nn.InstanceNorm2d(out_channels, affine=True),
             nn.LeakyReLU(0.2),
         )
 
@@ -146,7 +146,7 @@ class GAN(nn.Module):
         self.generator.train()
 
         if debug_mode:
-            self.logger = SummaryWriter(f"logs/food_gan/")
+            self.logger = SummaryWriter(config.LOG_DIR)
             self.critic_loss_list=[]
             self.gen_loss_list=[]
             self.validation_z = torch.randn(data_loader.batch_size, self.latent_dim, 1, 1, device=fabric.device)
@@ -155,19 +155,21 @@ class GAN(nn.Module):
             for batch_idx, (real, labels) in enumerate(tqdm(data_loader)):
                 #real=real.to(self.device)
                 #labels=labels.to(self.device)
+                
+                #Debug condition
+                condition=debug_mode and (batch_idx % config.DEBUG_EVERY_ITER) == 0 and batch_idx > 0
 
+                # Train Critic: max E[critic(real)] - E[critic(fake)], equivalent to minimizing the negative of that
                 for _ in range(self.critic_iterations):
                     noise = torch.randn(real.shape[0], self.latent_dim, 1, 1, device=fabric.device)#.to(self.device)
                     fake = self.generator(noise, labels)
-
                     critic_real = self.critic(real, labels).reshape(-1)
                     critic_fake = self.critic(fake, labels).reshape(-1)
-
                     gp = self._gradient_penalty(labels, real, fake, fabric.device)
                     loss_critic = -(torch.mean(critic_real) - torch.mean(critic_fake)) + self.labmda_gp * gp
                     if debug_mode: self.critic_loss_list.append(loss_critic.item())
-                    if debug_mode and batch_idx % config.DEBUG_EVERY_ITER == 0 and batch_idx > 0:
-                        self.logger.add_scalar("Loss of Critic", np.mean(self.critic_loss_list))
+                    if condition:
+                        self.logger.add_scalar("Loss of Critic", np.mean(self.critic_loss_list), self.step)
                         self.critic_loss_list=[]
                     self.critic.zero_grad()
                     fabric.backward(loss_critic, retain_graph=True)
@@ -177,20 +179,30 @@ class GAN(nn.Module):
                 gen_fake = self.critic(fake, labels).reshape(-1)
                 loss_gen = -torch.mean(gen_fake)
                 if debug_mode: self.gen_loss_list.append(loss_gen.item())
-                if debug_mode and batch_idx % config.DEBUG_EVERY_ITER == 0 and batch_idx > 0:
-                    self.logger.add_scalar("Loss of Gen", np.mean(self.gen_loss_list))
+                if condition:
+                    self.logger.add_scalar("Loss of Gen", np.mean(self.gen_loss_list), self.step)
                     self.gen_loss_list=[]
                 self.generator.zero_grad()
                 fabric.backward(loss_gen)
                 opt_g.step()
 
-                if debug_mode and batch_idx % config.DEBUG_EVERY_ITER == 0 and batch_idx > 0:
-                    self._on_train_batch_end(real, labels, epoch, batch_idx, data_loader, loss_critic.item(), loss_gen.item(), num_epochs)
+                if condition:
+                    self._on_debug_batch_end(real, labels, epoch, batch_idx, data_loader, loss_critic.item(), loss_gen.item(), num_epochs)
+
+                if debug_mode and batch_idx == data_loader.__len__()-1:
+                    self.logger.add_scalar("Epoch \"y\" at step \"x\"", epoch, self.step)
+
+                if condition: self.step += 1
         print("Training ended!")
 
+        if debug_mode:
+            self.logger.close()
 
-    def _on_train_batch_end(self, x, labels, epoch, batch_idx, loader, loss_critic, loss_gen, num_epochs):
-        print(f"Epoch [{epoch}/{num_epochs}] Batch {batch_idx}/{len(loader)} \
+        self.save_checkpoint({'gen': self.generator.state_dict(), 'disc': self.critic.state_dict()})
+
+
+    def _on_debug_batch_end(self, x, labels, epoch, batch_idx, loader, loss_critic, loss_gen, num_epochs):
+        print(f"Epoch [{epoch+1}/{num_epochs}] Batch {batch_idx}/{len(loader)} \
                 Loss D: {loss_critic:.4f}, loss G: {loss_gen:.4f}")
         with torch.no_grad():   
             # log sampled images
@@ -199,12 +211,10 @@ class GAN(nn.Module):
             fake_grid = torchvision.utils.make_grid(fake[:32], normalize=True)
             self.logger.add_image("Real Images", real_grid, global_step=self.step)
             self.logger.add_image("Fake Images", fake_grid, global_step=self.step)
-        self.step+=1
 
         
 
     def _gradient_penalty(self, labels, real, fake, device):
-
         BATCH_SIZE, C, H, W = real.shape
         alpha = torch.rand((BATCH_SIZE, 1, 1, 1)).repeat(1, C, H, W).to(device)
         interpolated_images = real * alpha + fake * (1 - alpha)
@@ -227,7 +237,6 @@ class GAN(nn.Module):
         return gradient_penalty
 
 
-
     def _configure_optimizers(self):
         lr = self.lr
         b1 = self.b1
@@ -237,6 +246,7 @@ class GAN(nn.Module):
 
         return opt_d, opt_g
 
+
     @staticmethod
     def _initialize_weights(model):
         # Initializes weights according to the DCGAN paper
@@ -245,13 +255,15 @@ class GAN(nn.Module):
                 nn.init.normal_(m.weight.data, 0.0, 0.02) #in-place update
 
 
-
     def save_checkpoint(state, filename="food101_wgan_gp.pth.tar"):
         print("=> Saving checkpoint")
         torch.save(state, filename)
-
+        print("=> Saving done!")
+        
 
     def load_checkpoint(checkpoint, gen, disc):
         print("=> Loading checkpoint")
-        gen.load_state_dict(checkpoint['gen'])
-        disc.load_state_dict(checkpoint['disc'])
+        obj=torch.load(checkpoint)
+        gen.load_state_dict(obj['gen'])
+        disc.load_state_dict(obj['disc'])
+        print("=> Loading done!")
