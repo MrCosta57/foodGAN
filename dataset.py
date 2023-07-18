@@ -5,22 +5,26 @@ import tarfile, tempfile
 import config
 
 class Custom_Food101():
-    def __init__(self, data_dir=config.DATA_DIR, batch_size=config.BATCH_SIZE, download=False, is_compressed=True,
-                 num_workers=config.NUM_WORKERS_DATASET, transform=None, img_size=config.IMG_SIZE):
+    def __init__(self, data_dir=config.DATA_DIR, file_name=config.FILE_NAME, batch_size=config.BATCH_SIZE, is_compressed=True,
+                 num_workers=config.NUM_WORKERS_DATASET, img_size=config.IMG_SIZE):
 
         self.data_dir = data_dir
+        self.file_name = file_name
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.img_size=img_size
         self.is_compressed = is_compressed
-        self.temp_dir = tempfile.mkdtemp()
+        if is_compressed:
+            self.temp_dir = tempfile.mkdtemp()
+        else:
+            self.temp_dir = data_dir
 
     def prepare_data(self):
         if self.is_compressed:
             #print("Search for dataset in ", config.DATA_DIR+config.FILE_NAME)
             print("Extract dataset in ", self.temp_dir)
             # Open the tar.gz file
-            with tarfile.open(config.DATA_DIR+config.FILE_NAME, 'r:gz') as tar:
+            with tarfile.open(self.data_dir+self.file_name, 'r:gz') as tar:
                 # Extract the contents to the temporary environment
                 tar.extractall(self.temp_dir)
             print("Extraction done!")
