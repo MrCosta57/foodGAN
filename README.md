@@ -17,8 +17,8 @@
 <div align="center">
   <div style="display: flex; justify-content: center; align-items: center;">
     <a href="https://github.com/MrCosta57/food_gan">
-        <img src="images/pytorch_logo.png" alt="Pytorch logo" width="150" height="150" style="max-width: 38%; margin:  15px;">
-        <img src="images/fabric_logo.png" alt="Fabric logo" width="150" height="150" style="max-width: 38%; margin:  15px;">
+        <img src="images/pytorch_logo.png" alt="Pytorch logo" width="160" height="150">
+        <img src="images/fabric_logo.png" alt="Fabric logo" width="160" height="150">
     </a>
   </div>
 
