@@ -12,26 +12,13 @@
 *** https://www.markdownguide.org/basic-syntax/#reference-style-links
 -->
 
-<style>
-/* Optional CSS for styling */
-.image-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-.image-container img {
-    max-width: 38%; /* Adjust the width as needed */
-    margin:  15px;
-}
-</style>
-
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <div class="image-container">
+  <div style="display: flex; justify-content: center; align-items: center;">
     <a href="https://github.com/MrCosta57/food_gan">
-        <img src="images/pytorch_logo.png" alt="Pytorch logo" width="150" height="150">
-        <img src="images/fabric_logo.png" alt="Fabric logo" width="150" height="150">
+        <img src="images/pytorch_logo.png" alt="Pytorch logo" width="150" height="150" style="max-width: 38%; margin:  15px;">
+        <img src="images/fabric_logo.png" alt="Fabric logo" width="150" height="150" style="max-width: 38%; margin:  15px;">
     </a>
   </div>
 
