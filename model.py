@@ -4,10 +4,10 @@ from tqdm import tqdm
 import numpy as np
 import torchvision
 from lightning.fabric.loggers import TensorBoardLogger
-from torch.utils.tensorboard import SummaryWriter
 import torchvision.transforms.functional as F
 from lightning.fabric import Fabric
 import config
+
 
 class Discriminator(nn.Module):
     def __init__(self, channels_img, features_d, num_classes, img_size):
@@ -90,6 +90,9 @@ class Generator(nn.Module):
 
 
 class GAN(nn.Module):
+    '''
+    WGAN-GP model implementation. Generator and Discriminator are CNNs.
+    '''
     def __init__(self,
                  latent_dim: int = config.Z_DIM, lr: float = config.LEARNING_RATE,
                  b1: float = config.B1,
@@ -173,8 +176,8 @@ class GAN(nn.Module):
                     self.gen_loss_list.append(loss_gen_item)
 
                 if debug_mode and (batch_idx % config.DEBUG_EVERY_ITER) == 0 and batch_idx > 0:
-                    self.fabric.log("Loss of Critic", np.mean(self.critic_loss_list), self.step)
-                    self.fabric.log("Loss of Gen", np.mean(self.gen_loss_list), self.step)
+                    self.fabric.log("Loss of discriminator", np.mean(self.critic_loss_list), self.step)
+                    self.fabric.log("Loss of generator", np.mean(self.gen_loss_list), self.step)
                     self._on_debug_batch_end(real, labels, epoch+1, batch_idx, data_loader, loss_critic_item, loss_gen_item, num_epochs, real.shape[0])
                     self.critic_loss_list=[]
                     self.gen_loss_list=[]
@@ -182,11 +185,15 @@ class GAN(nn.Module):
             
                 if debug_mode and batch_idx == len(data_loader)-1:
                     self._on_debug_epoch_end(real, labels, epoch+1, loss_critic_item, loss_gen_item, real.shape[0])
+
+            if epoch+1 % 5==0:
+                print("Checkpointing at epoch ", epoch+1)
+                GAN.save_model_ckp(self, f"food101_wgan_gp_epochs_{epoch+1}.ckpt")
         print("Training ended!")
         if debug_mode:
-            self.fabric.logger.finalize("Success")
+            self.fabric.logger.finalize("success")
 
-        GAN.save_model_ckp(self)
+        GAN.save_model_ckp(self, f"food101_wgan_gp_epochs_{num_epochs}.ckpt")
 
 
     def _gradient_penalty(self, labels, real, fake, device):
@@ -224,26 +231,30 @@ class GAN(nn.Module):
             fake = self(self.validation_z[:batch_size], labels).detach()
             real_grid = torchvision.utils.make_grid(x[:32], normalize=True)
             fake_grid = torchvision.utils.make_grid(fake[:32], normalize=True)
-            self.fabric.logger.experiment.add_image("Real Images", real_grid, self.step)
-            self.fabric.logger.experiment.add_image("Fake Images", fake_grid, self.step)
+            self.fabric.logger.experiment.add_image("Real images", real_grid, self.step)
+            self.fabric.logger.experiment.add_image("Fake images", fake_grid, self.step)
 
     def _on_debug_epoch_end(self, x, labels, epoch, loss_critic, loss_gen, batch_size):
-        self.fabric.log("Epoch loss of Critic", loss_critic, epoch)
-        self.fabric.log("Epoch loss of Gen", loss_gen, epoch)
+        self.fabric.log("Epoch loss of discriminator", loss_critic, epoch)
+        self.fabric.log("Epoch loss of generator", loss_gen, epoch)
         with torch.no_grad():   
             # log sampled images
             fake = self(self.validation_z[:batch_size], labels).detach()
             real_grid = torchvision.utils.make_grid(x[:32], normalize=True)
             fake_grid = torchvision.utils.make_grid(fake[:32], normalize=True)
-            self.fabric.logger.experiment.add_image("Real Images", real_grid, epoch)
-            self.fabric.logger.experiment.add_image("Fake Images", fake_grid, epoch)
+            self.fabric.logger.experiment.add_image("Epoch real images", real_grid, epoch)
+            self.fabric.logger.experiment.add_image("Epoch fake images", fake_grid, epoch)
 
 
     def generate(self, label, num_pred=8):
         self.generator.eval()
         with torch.no_grad():
             noise=torch.randn(num_pred, self.latent_dim, 1, 1, device=self.fabric.device)
-            labels=torch.tensor([label], device=self.fabric.device).repeat(num_pred)
+            labels=None
+            if isinstance(label, int):
+                labels=torch.tensor([label], device=self.fabric.device).repeat(num_pred)
+            else:
+                labels=label.to(self.fabric.device)
             img=self(noise, labels).detach()
             grid=torchvision.utils.make_grid(img, normalize=True).cpu()
             grid=grid.permute(1,2,0).numpy()
@@ -268,8 +279,8 @@ class GAN(nn.Module):
         print("=> Loading checkpoint")
         model=GAN()
         full_dict=model.fabric.load(checkpoint_file)
-        model.critic.load_state_dict(full_dict['disc'])
-        model.generator.load_state_dict(full_dict['gen'])
+        model.critic.load_state_dict(full_dict['critic'])
+        model.generator.load_state_dict(full_dict['generator'])
         model.latent_dim=full_dict['latent_dim']
         print("=> Loading done!")
         return model

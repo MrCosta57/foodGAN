@@ -4,7 +4,13 @@ from torchvision import transforms as transforms
 import tarfile, tempfile
 import config
 
+
 class Custom_Food101():
+    '''
+    Custom class for modelling the Food101 dataset. Place the compressed dataset (file.tar.gz) in the `data_dir` folder or 
+    extract it and provide the path to the extracted folder. If compressed version of the dataset is provided, it will be extracted to a temp
+    folder and `prepare_data()` must be called before `get_dataloaders()`.
+    '''
     def __init__(self, data_dir=config.DATA_DIR, file_name=config.FILE_NAME, batch_size=config.BATCH_SIZE, is_compressed=True,
                  num_workers=config.NUM_WORKERS_DATASET, img_size=config.IMG_SIZE):
 
@@ -20,6 +26,9 @@ class Custom_Food101():
             self.temp_dir = data_dir
 
     def prepare_data(self):
+        '''
+        Extracts the compressed dataset to a temporary folder. This method must be called before `get_dataloaders()` if the dataset is compressed.
+        '''
         if self.is_compressed:
             #print("Search for dataset in ", config.DATA_DIR+config.FILE_NAME)
             print("Extract dataset in ", self.temp_dir)
@@ -31,10 +40,13 @@ class Custom_Food101():
 
 
     def get_dataloaders(self):
+        '''
+        Returns the train and test dataloaders for the Food101 dataset. 
+        The train dataloader has random horizontal and vertical flips, random resized crops and normalization transformations.
+        '''
         train_transform=transforms.Compose([
-                transforms.RandomResizedCrop(config.IMG_SIZE),
-                transforms.RandomVerticalFlip(),
-                transforms.RandomHorizontalFlip(),
+                transforms.Resize(self.img_size),
+                transforms.CenterCrop(self.img_size),
                 transforms.ToTensor(),
                 transforms.Normalize(
                     [0.5 for _ in range(config.CHANNELS_IMG)], [0.5 for _ in range(config.CHANNELS_IMG)]
@@ -46,6 +58,8 @@ class Custom_Food101():
 
         test_transform = transforms.Compose([
             transforms.Resize(self.img_size),
+            transforms.CenterCrop(self.img_size),
+            transforms.ToTensor(),
             transforms.Normalize(
                 [0.5 for _ in range(config.CHANNELS_IMG)], [0.5 for _ in range(config.CHANNELS_IMG)])
         ])
