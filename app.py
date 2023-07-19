@@ -2,12 +2,12 @@ import streamlit as st
 import pandas as pd
 from model import GAN
 
-checkpoints_path = "checkpoints/food101_wgan_gp_with_z_val.ckpt"
-labels_path = "labels.csv"
+checkpoints_path = "checkpoints/error_gan.ckpt"
+labels_path = "dataset/labels.csv"
 
 @st.cache_data
 def load_labels():
-    df=pd.read_csv("labels.csv", header=0)
+    df=pd.read_csv(labels_path, header=0)
     options = df['labels'].values
     return options
 

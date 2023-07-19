@@ -131,11 +131,11 @@ class GAN(nn.Module):
     def training_loop(self, data_loader, num_epochs=config.NUM_EPOCHS, debug_mode=False, debug_grad=False):
         if debug_grad: torch.autograd.set_detect_anomaly(True)
         print("Training started!")
-        opt_critic, opt_g=self._configure_optimizers()
+        self._configure_optimizers()
 
         #Fabric framework optimization
-        self.critic, opt_critic=self.fabric.setup(self.critic, opt_critic)
-        self.generator, opt_g=self.fabric.setup(self.generator, opt_g)
+        self.critic, self.opt_critic=self.fabric.setup(self.critic, self.opt_critic)
+        self.generator, self.opt_g=self.fabric.setup(self.generator, self.opt_g)
         data_loader=self.fabric.setup_dataloaders(data_loader)
         print("End fabric setup")
         
@@ -157,18 +157,18 @@ class GAN(nn.Module):
                     critic_fake = self.critic(fake, labels).reshape(-1)
                     gp = self._gradient_penalty(labels, real, fake, self.fabric.device)
                     loss_critic = -(torch.mean(critic_real) - torch.mean(critic_fake)) + self.labmda_gp * gp
-                    loss_critic_item=loss_critic.item() #for debug purposes
+                    loss_critic_item=round(loss_critic.item(), 4) #for debug purposes
                     self.critic.zero_grad()
                     self.fabric.backward(loss_critic, retain_graph=True)
-                    opt_critic.step()
+                    self.opt_critic.step()
 
                 # Train Generator: max E[critic(gen_fake)] <-> min -E[critic(gen_fake)]
                 gen_fake = self.critic(fake, labels).reshape(-1)
                 loss_gen = -torch.mean(gen_fake)
-                loss_gen_item=loss_gen.item() #for debug purposes
+                loss_gen_item=round(loss_gen.item(), 4) #for debug purposes
                 self.generator.zero_grad()
                 self.fabric.backward(loss_gen)
-                opt_g.step()
+                self.opt_g.step()
 
                 #Logging
                 if debug_mode: 
@@ -176,8 +176,8 @@ class GAN(nn.Module):
                     self.gen_loss_list.append(loss_gen_item)
 
                 if debug_mode and (batch_idx % config.DEBUG_EVERY_ITER) == 0 and batch_idx > 0:
-                    self.fabric.log("Loss of discriminator", np.mean(self.critic_loss_list), self.step)
-                    self.fabric.log("Loss of generator", np.mean(self.gen_loss_list), self.step)
+                    self.fabric.log("Loss of discriminator", round(np.mean(self.critic_loss_list), 5), self.step)
+                    self.fabric.log("Loss of generator", round(np.mean(self.gen_loss_list), 5), self.step)
                     self._on_debug_batch_end(real, labels, epoch+1, batch_idx, data_loader, loss_critic_item, loss_gen_item, num_epochs, real.shape[0])
                     self.critic_loss_list=[]
                     self.gen_loss_list=[]
@@ -186,7 +186,8 @@ class GAN(nn.Module):
                 if debug_mode and batch_idx == len(data_loader)-1:
                     self._on_debug_epoch_end(real, labels, epoch+1, loss_critic_item, loss_gen_item, real.shape[0])
 
-            if epoch+1 % 5==0:
+            if debug_mode: self.fabric.logger.experiment.flush()
+            if (epoch+1) % 5==0 and (epoch+1)!=num_epochs:
                 print("Checkpointing at epoch ", epoch+1)
                 GAN.save_model_ckp(self, f"food101_wgan_gp_epochs_{epoch+1}.ckpt")
         print("Training ended!")
@@ -219,9 +220,8 @@ class GAN(nn.Module):
         lr = self.lr
         b1 = self.b1
         b2 = self.b2
-        opt_d = torch.optim.Adam(self.critic.parameters(), lr=lr, betas=(b1, b2))
-        opt_g = torch.optim.Adam(self.generator.parameters(), lr=lr, betas=(b1, b2))
-        return opt_d, opt_g
+        self.opt_d = torch.optim.Adam(self.critic.parameters(), lr=lr, betas=(b1, b2))
+        self.opt_g = torch.optim.Adam(self.generator.parameters(), lr=lr, betas=(b1, b2))
     
 
     def _on_debug_batch_end(self, x, labels, epoch, batch_idx, loader, loss_critic, loss_gen, num_epochs, batch_size):
@@ -269,7 +269,8 @@ class GAN(nn.Module):
 
     @staticmethod
     def save_model_ckp(model, filename="food101_wgan_gp.ckpt"):
-        state = {"latent_dim": model.latent_dim, "critic": model.critic, "generator": model.generator}
+        state = {"latent_dim": model.latent_dim, "critic": model.critic, "generator": model.generator, 
+                 "opt_critic": model.opt_critic, "opt_generator": model.opt_g, "step": model.step}
         print("=> Saving checkpoint")
         model.fabric.save(config.CHECKPOINT_DIR+filename, state)
         print("=> Saving done!")
