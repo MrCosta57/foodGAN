@@ -4,7 +4,6 @@ from tqdm import tqdm
 import numpy as np
 import torchvision
 from lightning.fabric.loggers import TensorBoardLogger
-import torchvision.transforms.functional as F
 from lightning.fabric import Fabric
 import config
 
@@ -94,7 +93,8 @@ class GAN(nn.Module):
     WGAN-GP model implementation. Generator and Discriminator are CNNs.
     '''
     def __init__(self,
-                 latent_dim: int = config.Z_DIM, lr: float = config.LEARNING_RATE,
+                 latent_dim: int = config.Z_DIM, 
+                 lr: float = config.LEARNING_RATE,
                  b1: float = config.B1,
                  b2: float = config.B2,
                  critic_iterations : int = config.CRITIC_ITERATIONS,
@@ -123,19 +123,21 @@ class GAN(nn.Module):
         self._initialize_weights(self.generator)
         self.fabric=Fabric(accelerator="auto", precision=self.precision, devices=self.num_devices, strategy="auto")
 
-
     def forward(self, z, y):
         return self.generator(z, y)
         
-        
+
     def training_loop(self, data_loader, num_epochs=config.NUM_EPOCHS, debug_mode=False, debug_grad=False):
+        """
+        Training loop for the WGAN-GP model. Train and test dataloader are used sequentially to train the model on the whole dataset.
+        """
         if debug_grad: torch.autograd.set_detect_anomaly(True)
         print("Training started!")
-        self._configure_optimizers()
 
-        #Fabric framework optimization
-        self.critic, self.opt_critic=self.fabric.setup(self.critic, self.opt_critic)
-        self.generator, self.opt_g=self.fabric.setup(self.generator, self.opt_g)
+        #Fabric framework initialization
+        opt_critic, opt_g=self._configure_optimizers()
+        self.critic, opt_critic=self.fabric.setup(self.critic, opt_critic)
+        self.generator, opt_g=self.fabric.setup(self.generator, opt_g)
         data_loader=self.fabric.setup_dataloaders(data_loader)
         print("End fabric setup")
         
@@ -150,46 +152,48 @@ class GAN(nn.Module):
         for epoch in range(num_epochs):
             for batch_idx, (real, labels) in enumerate(tqdm(data_loader)):
                 # Train Critic: max E[critic(real)] - E[critic(fake)], equivalent to minimizing the negative of that
-                for _ in range(self.critic_iterations):
-                    noise = torch.randn(real.shape[0], self.latent_dim, 1, 1, device=self.fabric.device)
-                    fake = self.generator(noise, labels)
-                    critic_real = self.critic(real, labels).reshape(-1)
-                    critic_fake = self.critic(fake, labels).reshape(-1)
-                    gp = self._gradient_penalty(labels, real, fake, self.fabric.device)
-                    loss_critic = -(torch.mean(critic_real) - torch.mean(critic_fake)) + self.labmda_gp * gp
-                    loss_critic_item=round(loss_critic.item(), 4) #for debug purposes
-                    self.critic.zero_grad()
-                    self.fabric.backward(loss_critic, retain_graph=True)
-                    self.opt_critic.step()
+                noise = torch.randn(real.shape[0], self.latent_dim, 1, 1, device=self.fabric.device)
+                fake = self.generator(noise, labels)
+                critic_real = self.critic(real, labels).reshape(-1)
+                critic_fake = self.critic(fake, labels).reshape(-1)
+                gp = self._gradient_penalty(labels, real, fake, self.fabric.device)
+                loss_critic = -(torch.mean(critic_real) - torch.mean(critic_fake)) + self.labmda_gp * gp
+                loss_critic_item=round(loss_critic.item(), 4) #for debug purposes
+                self.critic.zero_grad()
+                self.fabric.backward(loss_critic, retain_graph=True)
+                opt_critic.step()
 
-                # Train Generator: max E[critic(gen_fake)] <-> min -E[critic(gen_fake)]
-                gen_fake = self.critic(fake, labels).reshape(-1)
-                loss_gen = -torch.mean(gen_fake)
-                loss_gen_item=round(loss_gen.item(), 4) #for debug purposes
-                self.generator.zero_grad()
-                self.fabric.backward(loss_gen)
-                self.opt_g.step()
+                # Train the generator every `critic_iterations` steps
+                if (batch_idx % self.critic_iterations) == 0 and batch_idx > 0:
+                    # Train Generator: max E[critic(gen_fake)] <-> min -E[critic(gen_fake)]
+                    gen_fake = self.critic(fake, labels).reshape(-1)
+                    loss_gen = -torch.mean(gen_fake)
+                    loss_gen_item=round(loss_gen.item(), 4) #for debug purposes
+                    self.generator.zero_grad()
+                    self.fabric.backward(loss_gen)
+                    opt_g.step()
 
-                #Logging
-                if debug_mode: 
-                    self.critic_loss_list.append(loss_critic_item)
-                    self.gen_loss_list.append(loss_gen_item)
+                    #Logging
+                    if debug_mode: 
+                        self.critic_loss_list.append(loss_critic_item)
+                        self.gen_loss_list.append(loss_gen_item)
 
-                if debug_mode and (batch_idx % config.DEBUG_EVERY_ITER) == 0 and batch_idx > 0:
-                    self.fabric.log("Loss of discriminator", round(np.mean(self.critic_loss_list), 5), self.step)
-                    self.fabric.log("Loss of generator", round(np.mean(self.gen_loss_list), 5), self.step)
-                    self._on_debug_batch_end(real, labels, epoch+1, batch_idx, data_loader, loss_critic_item, loss_gen_item, num_epochs, real.shape[0])
-                    self.critic_loss_list=[]
-                    self.gen_loss_list=[]
-                    self.step += 1
+                    if debug_mode and (batch_idx % (config.DEBUG_EVERY_ITER*self.critic_iterations)) == 0 and batch_idx > 0:
+                        self.fabric.log("Loss of discriminator", round(np.mean(self.critic_loss_list), 5), self.step)
+                        self.fabric.log("Loss of generator", round(np.mean(self.gen_loss_list), 5), self.step)
+                        self._on_debug_batch_end(real, labels, epoch+1, batch_idx, data_loader, loss_critic_item, loss_gen_item, num_epochs, real.shape[0])
+                        self.critic_loss_list=[]
+                        self.gen_loss_list=[]
+                        self.step += 1
             
-                if debug_mode and batch_idx == len(data_loader)-1:
-                    self._on_debug_epoch_end(real, labels, epoch+1, loss_critic_item, loss_gen_item, real.shape[0])
+                    """ if debug_mode and batch_idx == len(data_loader)-1:
+                        self._on_debug_epoch_end(real, labels, epoch+1, loss_critic_item, loss_gen_item, real.shape[0]) """
 
             if debug_mode: self.fabric.logger.experiment.flush()
             if (epoch+1) % 5==0 and (epoch+1)!=num_epochs:
                 print("Checkpointing at epoch ", epoch+1)
                 GAN.save_model_ckp(self, f"food101_wgan_gp_epochs_{epoch+1}.ckpt")
+
         print("Training ended!")
         if debug_mode:
             self.fabric.logger.finalize("success")
@@ -220,8 +224,9 @@ class GAN(nn.Module):
         lr = self.lr
         b1 = self.b1
         b2 = self.b2
-        self.opt_d = torch.optim.Adam(self.critic.parameters(), lr=lr, betas=(b1, b2))
-        self.opt_g = torch.optim.Adam(self.generator.parameters(), lr=lr, betas=(b1, b2))
+        opt_d = torch.optim.Adam(self.critic.parameters(), lr=lr, betas=(b1, b2))
+        opt_g = torch.optim.Adam(self.generator.parameters(), lr=lr, betas=(b1, b2))
+        return opt_d, opt_g
     
 
     def _on_debug_batch_end(self, x, labels, epoch, batch_idx, loader, loss_critic, loss_gen, num_epochs, batch_size):
@@ -234,7 +239,7 @@ class GAN(nn.Module):
             self.fabric.logger.experiment.add_image("Real images", real_grid, self.step)
             self.fabric.logger.experiment.add_image("Fake images", fake_grid, self.step)
 
-    def _on_debug_epoch_end(self, x, labels, epoch, loss_critic, loss_gen, batch_size):
+    """ def _on_debug_epoch_end(self, x, labels, epoch, loss_critic, loss_gen, batch_size):
         self.fabric.log("Epoch loss of discriminator", loss_critic, epoch)
         self.fabric.log("Epoch loss of generator", loss_gen, epoch)
         with torch.no_grad():   
@@ -243,10 +248,13 @@ class GAN(nn.Module):
             real_grid = torchvision.utils.make_grid(x[:32], normalize=True)
             fake_grid = torchvision.utils.make_grid(fake[:32], normalize=True)
             self.fabric.logger.experiment.add_image("Epoch real images", real_grid, epoch)
-            self.fabric.logger.experiment.add_image("Epoch fake images", fake_grid, epoch)
+            self.fabric.logger.experiment.add_image("Epoch fake images", fake_grid, epoch) """
 
 
     def generate(self, label, num_pred=8):
+        """
+        Generates `num_pred` images of the specified `label`.
+        """
         self.generator.eval()
         with torch.no_grad():
             noise=torch.randn(num_pred, self.latent_dim, 1, 1, device=self.fabric.device)
@@ -260,6 +268,7 @@ class GAN(nn.Module):
             grid=grid.permute(1,2,0).numpy()
             return grid
 
+
     @staticmethod
     def _initialize_weights(model):
         # Initializes weights according to the DCGAN paper
@@ -269,8 +278,7 @@ class GAN(nn.Module):
 
     @staticmethod
     def save_model_ckp(model, filename="food101_wgan_gp.ckpt"):
-        state = {"latent_dim": model.latent_dim, "critic": model.critic, "generator": model.generator, 
-                 "opt_critic": model.opt_critic, "opt_generator": model.opt_g, "step": model.step}
+        state = {"latent_dim": model.latent_dim, "critic": model.critic, "generator": model.generator}
         print("=> Saving checkpoint")
         model.fabric.save(config.CHECKPOINT_DIR+filename, state)
         print("=> Saving done!")

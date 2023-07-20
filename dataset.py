@@ -1,5 +1,5 @@
 from torchvision.datasets import Food101
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, ConcatDataset
 from torchvision import transforms as transforms
 import tarfile, tempfile
 import config
@@ -39,7 +39,7 @@ class Custom_Food101():
             print("Extraction done!")
 
 
-    def get_dataloaders(self):
+    def get_dataloader(self):
         '''
         Returns the train and test dataloaders for the Food101 dataset. 
         The train dataloader has random horizontal and vertical flips, random resized crops and normalization transformations.
@@ -53,8 +53,7 @@ class Custom_Food101():
                 )
         ])
         train=Food101(root=self.temp_dir, split="train", download=False, transform=train_transform)
-        train_dl=DataLoader(train, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=True)
-
+        #train_dl=DataLoader(train, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=True)
 
         test_transform = transforms.Compose([
             transforms.Resize(self.img_size),
@@ -64,6 +63,8 @@ class Custom_Food101():
                 [0.5 for _ in range(config.CHANNELS_IMG)], [0.5 for _ in range(config.CHANNELS_IMG)])
         ])
         test=Food101(root=self.temp_dir, split="test", download=False, transform=test_transform)
-        test_dl=DataLoader(test, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=False)
+        #test_dl=DataLoader(test, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=False)
 
-        return train_dl, test_dl
+        concat=ConcatDataset([train, test])
+        dl=DataLoader(concat, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=True)
+        return dl
