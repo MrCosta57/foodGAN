@@ -61,6 +61,7 @@
       </ul>
     </li>
     <li><a href="#usage">Usage / Demo</a></li>
+    <li><a href="#roadmap">Roadmap / Future work</a></li>
     <li><a href="#references">References</a></li>
     <!--
     <li><a href="#roadmap">Roadmap</a></li>
@@ -80,14 +81,9 @@
 ## About The Project
 ![Product Name Screen Shot][product-screenshot]
 
-
-
-Here's why:
-* Your time should be focused on creating something amazing. A project that solves a problem and helps others
-* You shouldn't be doing the same tasks over and over like creating a README from scratch
-* You should implement DRY principles to the rest of your life :smile:
-
-
+This project refers to the implementation of one personal project for approaching the Generative AI field.
+The idea is to gain experience with Generative Adversarial Network models and in particular on Wasserstrein GAN with gradient penalty. This variant allows a more stable training procedure, get rids of some problems like mode collapse and provides a meaningful loss function interpretation. The final application's purpose is to generate synthetic images given a food category.<br/>
+In details the NN architectures and the hyperparameters used are taken from different popular parers cited in <a href="#references">References section</a> while instead, the developement is realized with famous frameworks like Pytorch and Lighting Fabric written also in <a href="#built-with">Built With</a> section.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -151,6 +147,19 @@ streamlit run app.py
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
+## Roadmap / Future work
+
+- [x] Base project structure
+- [x] GAN implementation using parameters and convolutional architectures from different papers
+- [ ] Train model for more epochs and trying different parameters
+- [ ] Trying other discriminator/generator architecture or model
+
+
+See the [open issues](https://github.com/MrCosta57/food_gan/issues) for a full list of proposed features (and known issues).
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
 ## References
     @misc{goodfellow2014generative,
         title={Generative Adversarial Networks}, 
@@ -189,22 +198,6 @@ streamlit run app.py
     }
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-<!-- 
-## Roadmap
-
-- [x] Add Changelog
-- [x] Add back to top links
-- [ ] Add Additional Templates w/ Examples
-- [ ] Add "components" document to easily copy & paste sections of the readme
-- [ ] Multi-language Support
-    - [ ] Chinese
-    - [ ] Spanish
-
-See the [open issues](https://github.com/othneildrew/Best-README-Template/issues) for a full list of proposed features (and known issues).
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
--->
 
 
 <!-- CONTRIBUTING -->

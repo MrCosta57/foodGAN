@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from model import GAN
 
-checkpoints_path = "checkpoints/error_gan.ckpt"
+checkpoints_path = "checkpoints/food101_wgan_gp_epochs_15.ckpt"
 labels_path = "dataset/labels.csv"
 
 @st.cache_data
