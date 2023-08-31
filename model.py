@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 import numpy as np
+import matplotlib.pyplot as plt
 import torchvision
 from lightning.fabric.loggers import TensorBoardLogger
 from lightning.fabric import Fabric
@@ -186,9 +187,6 @@ class GAN(nn.Module):
                         self.gen_loss_list=[]
                         self.step += 1
             
-                    """ if debug_mode and batch_idx == len(data_loader)-1:
-                        self._on_debug_epoch_end(real, labels, epoch+1, loss_critic_item, loss_gen_item, real.shape[0]) """
-
             if debug_mode: self.fabric.logger.experiment.flush()
             if (epoch+1) % 5==0 and (epoch+1)!=num_epochs:
                 print("Checkpointing at epoch ", epoch+1)
@@ -239,17 +237,6 @@ class GAN(nn.Module):
             self.fabric.logger.experiment.add_image("Real images", real_grid, self.step)
             self.fabric.logger.experiment.add_image("Fake images", fake_grid, self.step)
 
-    """ def _on_debug_epoch_end(self, x, labels, epoch, loss_critic, loss_gen, batch_size):
-        self.fabric.log("Epoch loss of discriminator", loss_critic, epoch)
-        self.fabric.log("Epoch loss of generator", loss_gen, epoch)
-        with torch.no_grad():   
-            # log sampled images
-            fake = self(self.validation_z[:batch_size], labels).detach()
-            real_grid = torchvision.utils.make_grid(x[:32], normalize=True)
-            fake_grid = torchvision.utils.make_grid(fake[:32], normalize=True)
-            self.fabric.logger.experiment.add_image("Epoch real images", real_grid, epoch)
-            self.fabric.logger.experiment.add_image("Epoch fake images", fake_grid, epoch) """
-
 
     def generate(self, label, num_pred=8):
         """
@@ -264,6 +251,7 @@ class GAN(nn.Module):
             else:
                 labels=label.to(self.fabric.device)
             img=self(noise, labels).detach()
+            plt.figure(figsize=(10,10))
             grid=torchvision.utils.make_grid(img, normalize=True).cpu()
             grid=grid.permute(1,2,0).numpy()
             return grid

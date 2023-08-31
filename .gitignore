@@ -161,3 +161,7 @@ cython_debug/
 
 .vscode/
 dataset/food-101/*
+logs/food_gan/*
+runs/
+checkpoints/*
+!checkpoints/food101_wgan_gp_epochs_60.ckpt
