@@ -16,10 +16,8 @@
 <br />
 <div align="center">
   <div style="display: flex; justify-content: center; align-items: center;">
-    <a href="https://github.com/MrCosta57/food_gan">
         <img src="images/pytorch_logo.png" alt="Pytorch logo" width="160" height="150">
         <img src="images/fabric_logo.png" alt="Fabric logo" width="160" height="150">
-    </a>
   </div>
 
   <h3 align="center">Food GAN project</h3>
@@ -271,7 +269,7 @@ Use this space to list resources you find helpful and would like to give credit 
 -->
 
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
-[linkedin-url]: https://www.linkedin.com/in/giovanni-costa-5b0b36238/
+[linkedin-url]: https://www.linkedin.com/in/giovanni-costaa/
 
 [product-screenshot]: images/screenshot.png
 
