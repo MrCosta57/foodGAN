@@ -3,22 +3,13 @@
 <a name="readme-top"></a>
 
 
-<!-- PROJECT SHIELDS -->
-<!--
-*** I'm using markdown "reference style" links for readability.
-*** Reference links are enclosed in brackets [ ] instead of parentheses ( ).
-*** See the bottom of this document for the declaration of the reference variables
-*** for contributors-url, forks-url, etc. This is an optional, concise syntax you may use.
-*** https://www.markdownguide.org/basic-syntax/#reference-style-links
--->
-
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
   <div style="display: flex; justify-content: center; align-items: center;">
     <a href="https://github.com/MrCosta57/food_gan">
-        <img src="images/pytorch_logo.png" alt="Pytorch logo" width="160" height="150">
-        <img src="images/fabric_logo.png" alt="Fabric logo" width="160" height="150">
+        <img src="assets/pytorch_logo.png" alt="Pytorch logo" width="160" height="150">
+        <img src="assets/fabric_logo.png" alt="Fabric logo" width="160" height="150">
     </a>
   </div>
 
@@ -35,46 +26,7 @@
   </p>
 </div>
 
-<div align="center">
-<!--Badges space-->
-
-[![LinkedIn][linkedin-shield]][linkedin-url]
-</div>
 <br/>
-
-
-<!-- TABLE OF CONTENTS -->
-<details style="padding-buttom=10px">
-  <summary>Table of Contents</summary>
-  <ol>
-    <li>
-      <a href="#about-the-project">About The Project</a>
-      <ul>
-        <li><a href="#built-with">Built With</a></li>
-      </ul>
-    </li>
-    <li>
-      <a href="#getting-started">Getting Started</a>
-      <ul>
-        <li><a href="#prerequisites">Prerequisites</a></li>
-        <li><a href="#installation">Installation</a></li>
-      </ul>
-    </li>
-    <li><a href="#usage">Usage / Demo</a></li>
-    <li><a href="#roadmap">Roadmap / Future work</a></li>
-    <li><a href="#references">References</a></li>
-    <!--
-    <li><a href="#roadmap">Roadmap</a></li>
-    <li><a href="#contributing">Contributing</a></li>
-    <li><a href="#license">License</a></li>
-    <li><a href="#contact">Contact</a></li>
-    <li><a href="#acknowledgments">Acknowledgments</a></li>
-    -->
-  </ol>
-</details>
-<br/>
-
-
 
 
 <!-- ABOUT THE PROJECT -->
@@ -83,22 +35,7 @@
 
 This project refers to the implementation of one personal project for approaching the Generative AI field.
 The idea is to gain experience with Generative Adversarial Network models and in particular on Wasserstrein GAN with gradient penalty. This variant allows a more stable training procedure, get rids of some problems like mode collapse and provides a meaningful loss function interpretation. The final application's purpose is to generate synthetic images given a food category.<br/>
-In details the NN architectures and the hyperparameters used are taken from different popular parers cited in <a href="#references">References section</a> while instead, the developement is realized with famous frameworks like Pytorch and Lighting Fabric written also in <a href="#built-with">Built With</a> section.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
-
-### Built With
-
-This section should list any major frameworks/libraries used to bootstrap your project. Leave any add-ons/plugins for the acknowledgements section. Here are a few examples.
-
-* [![Pytorch][Pytorch]][PyTorch-url]
-* [![NumPy][NumPy]][Numpy-url]
-* [![Pandas][Pandas]][Pandas-url]
-* [![Matplotlib][Matplotlib]][Matplotlib-url]
-* [![Fabric][Fabric]][Fabric-url]
-
+In details the NN architectures and the hyperparameters used are taken from different popular parers cited in <a href="#references">References section</a> while instead, the development is realized with Pytorch and Lighting Fabric.
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
@@ -106,43 +43,41 @@ This section should list any major frameworks/libraries used to bootstrap your p
 <!-- GETTING STARTED -->
 ## Getting Started
 
-This is an example of how you may give instructions on setting up your project locally.
-To get a local copy up and running follow these simple example steps.
-
-### Prerequisites
-
-This is an example of how to list things you need to use the software and how to install them.
-
-```sh
-pip install torch torchvision torchaudio #--index-url https://download.pytorch.org/whl/cu117
-pip install lightning
-pip install matplotlib
-pip install pandas
-pip install numpy
-pip install streamlit
-```
-
-### Installation
-
+### Development
 1. Clone the repo
    ```sh
    git clone https://github.com/MrCosta57/food_gan.git
    ```
-2. Enter your configuration in `config.py`
 
-3. _Before run the streamlit GUI you must place some model checkpoint in `checkpoints/` directory or train the model from scratch_
+1. Run the following commands to install the required libraries
+   ```sh
+   pip install torch --index-url https://download.pytorch.org/whl/cu118
+   pip install -r requirements.txt
+   ```
+
+1. Enter your configuration in `config.py` or use the default one
+
+1. Train the model
+   ```sh
+   python src/train.py
+   ```
+
+1. Run the streamlit GUI
+   ```sh
+    streamlit run src/app.py
+   ```
+
+**Note:** Before run the streamlit GUI you must place some model checkpoint in `checkpoints/` directory or train the model from scratch. You can download one checkpoint from <a href="https://drive.google.com/drive/folders/1MolNVjt3HZZ3bihJG1Cf0_Ij_ChbOE2Q?usp=sharing">Google Drive</a>
+
+
+### Deployment
+
+Docker
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
 
-<!-- USAGE EXAMPLES -->
-## Usage / Demo
-
-You can run one `.ipynb` file or
-```sh
-streamlit run app.py
-```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -273,7 +208,7 @@ Use this space to list resources you find helpful and would like to give credit 
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
 [linkedin-url]: https://www.linkedin.com/in/giovanni-costa-5b0b36238/
 
-[product-screenshot]: images/screenshot.png
+[product-screenshot]: assets/screenshot.png
 
 
 [PyTorch]: https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=for-the-badge&logo=PyTorch&logoColor=white
