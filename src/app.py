@@ -52,7 +52,7 @@ def load_gan_model(model_name, device):
 st.title(
     "WGAN-GP for food images generation\n :hamburger: :pizza: :meat_on_bone: :rice: :pancakes: :fried_egg:"
 )
-st.caption("Project realized by Giovanni Costa - 880892")
+st.caption("Project realized by Giovanni Costa")
 
 
 st.sidebar.header("Configuration")
@@ -87,4 +87,4 @@ if st.button("Generate") and model is not None:
     img_gen_text = st.text("Image generation...")
     img = model.generate(index_label)
     img_gen_text.text("Image generated!")
-    st.image(img, caption=label_list[index_label], use_column_width=True)
+    st.image(img, caption=label_list[index_label], use_container_width=True)

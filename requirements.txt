@@ -1,7 +1,8 @@
+torch==2.4
 lightning==2.4
 tqdm
-numpy
-pandas
+numpy==1.26
+pandas==2.2
 matplotlib
-streamlit
-torchvision==0.20
+streamlit==1.41
+torchvision

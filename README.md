@@ -7,10 +7,8 @@
 <br />
 <div align="center">
   <div style="display: flex; justify-content: center; align-items: center;">
-    <a href="https://github.com/MrCosta57/food_gan">
-        <img src="assets/pytorch_logo.png" alt="Pytorch logo" width="160" height="150">
-        <img src="assets/fabric_logo.png" alt="Fabric logo" width="160" height="150">
-    </a>
+      <img src="assets/pytorch_logo.png" alt="Pytorch logo" width="160" height="150">
+      <img src="assets/fabric_logo.png" alt="Fabric logo" width="160" height="150">
   </div>
 
   <h3 align="center">Food GAN project</h3>
@@ -31,7 +29,10 @@
 
 <!-- ABOUT THE PROJECT -->
 ## About The Project
-![Product Name Screen Shot][product-screenshot]
+
+<div style="text-align:center;">
+  <img src="assets/screenshot.png" alt="Product Name Screen Shot" style="width:70%;">
+</div>
 
 This project refers to the implementation of one personal project for approaching the Generative AI field.
 The idea is to gain experience with Generative Adversarial Network models and in particular on Wasserstrein GAN with gradient penalty. This variant allows a more stable training procedure, get rids of some problems like mode collapse and provides a meaningful loss function interpretation. The final application's purpose is to generate synthetic images given a food category.<br/>
@@ -51,8 +52,10 @@ In details the NN architectures and the hyperparameters used are taken from diff
 
 1. Run the following commands to install the required libraries
    ```sh
-   pip install torch --index-url https://download.pytorch.org/whl/cu118
-   pip install -r requirements.txt
+   # CPU
+   pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+   # CUDA
+   pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu118
    ```
 
 1. Enter your configuration in `config.py` or use the default one
@@ -72,14 +75,22 @@ In details the NN architectures and the hyperparameters used are taken from diff
 
 ### Deployment
 
-Docker
+Only CPU inference is supported in the Docker container.
+
+1. Build the Docker image
+   ```sh
+   docker build -t food_gan .
+   ```
+
+1. Run the Docker container
+   ```sh
+    docker run -p 8501:8501 food_gan
+    ```
+
+1. Open the browser and go to `http://localhost:8501`
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-
-
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
 ## Roadmap / Future work
@@ -207,9 +218,6 @@ Use this space to list resources you find helpful and would like to give credit 
 
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
 [linkedin-url]: https://www.linkedin.com/in/giovanni-costa-5b0b36238/
-
-[product-screenshot]: assets/screenshot.png
-
 
 [PyTorch]: https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=for-the-badge&logo=PyTorch&logoColor=white
 [PyTorch-url]: https://pytorch.org/
