@@ -29,7 +29,7 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-<div style="text-align:center;">
+<div align="center">
   <img src="assets/screenshot.png" alt="Product Name Screen Shot" style="width:70%;">
 </div>
 <br/>
