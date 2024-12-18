@@ -23,7 +23,6 @@
     <a href="https://github.com/MrCosta57/food_gan/issues">Request Feature</a>
   </p>
 </div>
-
 <br/>
 
 
@@ -33,18 +32,36 @@
 <div style="text-align:center;">
   <img src="assets/screenshot.png" alt="Product Name Screen Shot" style="width:70%;">
 </div>
+<br/>
 
 This project refers to the implementation of one personal project for approaching the Generative AI field.
 The idea is to gain experience with Generative Adversarial Network models and in particular on Wasserstrein GAN with gradient penalty. This variant allows a more stable training procedure, get rids of some problems like mode collapse and provides a meaningful loss function interpretation. The final application's purpose is to generate synthetic images given a food category.<br/>
-In details the NN architectures and the hyperparameters used are taken from different popular parers cited in <a href="#references">References section</a> while instead, the development is realized with Pytorch and Lighting Fabric.
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
+In details the NN architectures and the hyperparameters used are taken from different popular parers cited in <a href="#references">References section</a> while instead, the development is realized with Pytorch and Lighting Fabric
 
 
 <!-- GETTING STARTED -->
 ## Getting Started
 
+### Deployment
+
+Only CPU inference is supported in the Docker container
+
+1. Build the Docker image
+   ```sh
+   docker build -t food_gan .
+   ```
+
+1. Run the Docker container
+   ```sh
+   docker run -p 8501:8501 food_gan
+   ```
+
+1. Open the browser and go to `http://localhost:8501`
+
+
+
 ### Development
+
 1. Clone the repo
    ```sh
    git clone https://github.com/MrCosta57/food_gan.git
@@ -67,30 +84,10 @@ In details the NN architectures and the hyperparameters used are taken from diff
 
 1. Run the streamlit GUI
    ```sh
-    streamlit run src/app.py
+   streamlit run src/app.py
    ```
 
 **Note:** Before run the streamlit GUI you must place some model checkpoint in `checkpoints/` directory or train the model from scratch. You can download one checkpoint from <a href="https://drive.google.com/drive/folders/1MolNVjt3HZZ3bihJG1Cf0_Ij_ChbOE2Q?usp=sharing">Google Drive</a>
-
-
-### Deployment
-
-Only CPU inference is supported in the Docker container.
-
-1. Build the Docker image
-   ```sh
-   docker build -t food_gan .
-   ```
-
-1. Run the Docker container
-   ```sh
-    docker run -p 8501:8501 food_gan
-    ```
-
-1. Open the browser and go to `http://localhost:8501`
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 
 
 ## Roadmap / Future work
@@ -102,8 +99,6 @@ Only CPU inference is supported in the Docker container.
 
 
 See the [open issues](https://github.com/MrCosta57/food_gan/issues) for a full list of proposed features (and known issues).
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
 ## References
@@ -143,8 +138,6 @@ See the [open issues](https://github.com/MrCosta57/food_gan/issues) for a full l
         primaryClass={cs.LG}
     }
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 
 <!-- CONTRIBUTING -->
 <!--## Contributing
@@ -160,7 +153,7 @@ Don't forget to give the project a star! Thanks again!
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 -->
 
 
@@ -169,7 +162,7 @@ Don't forget to give the project a star! Thanks again!
 
 Distributed under the MIT License. See `LICENSE.txt` for more information.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 -->
 
 
@@ -181,7 +174,7 @@ Your Name - [@your_twitter](https://twitter.com/your_username) - email@example.c
 
 Project Link: [https://github.com/your_username/repo_name](https://github.com/your_username/repo_name)
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 -->
 
 
@@ -199,7 +192,7 @@ Use this space to list resources you find helpful and would like to give credit 
 * [Font Awesome](https://fontawesome.com)
 * [React Icons](https://react-icons.github.io/react-icons/search)
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 -->
 
 
